@@ -1,11 +1,15 @@
-from flask import Flask, render_template,request,redirect,send_from_directory,url_for
+import streamlit as st
 import numpy as np
+import tensorflow as tf
+from PIL import Image
 import json
 import uuid
-import tensorflow as tf
+import os
 
-app = Flask(__name__)
+# Load model
 model = tf.keras.models.load_model("models/plant_disease_recog_model_pwp.keras")
+
+# Labels
 label = ['Apple___Apple_scab',
  'Apple___Black_rot',
  'Apple___Cedar_apple_rust',
@@ -46,45 +50,39 @@ label = ['Apple___Apple_scab',
  'Tomato___Tomato_mosaic_virus',
  'Tomato___healthy']
 
+# Load JSON data
 with open("plant_disease.json",'r') as file:
     plant_disease = json.load(file)
 
-# print(plant_disease[4])
+# Streamlit UI
+st.title("Plant Disease Detection")
 
-@app.route('/uploadimages/<path:filename>')
-def uploaded_images(filename):
-    return send_from_directory('./uploadimages', filename)
-
-@app.route('/',methods = ['GET'])
-def home():
-    return render_template('home.html')
+uploaded_file = st.file_uploader("Upload a plant leaf image", type=["jpg", "jpeg", "png"])
 
 def extract_features(image):
-    image = tf.keras.utils.load_img(image,target_size=(160,160))
+    image = image.resize((160, 160))
     feature = tf.keras.utils.img_to_array(image)
-    feature = np.array([feature])
+    feature = np.expand_dims(feature, axis=0)
     return feature
 
 def model_predict(image):
     img = extract_features(image)
     prediction = model.predict(img)
-    # print(prediction)
-    prediction_label = plant_disease[prediction.argmax()]
-    return prediction_label
+    predicted_index = np.argmax(prediction)
+    return plant_disease[predicted_index]
 
-@app.route('/upload/',methods = ['POST','GET'])
-def uploadimage():
-    if request.method == "POST":
-        image = request.files['img']
-        temp_name = f"uploadimages/temp_{uuid.uuid4().hex}"
-        image.save(f'{temp_name}_{image.filename}')
-        print(f'{temp_name}_{image.filename}')
-        prediction = model_predict(f'./{temp_name}_{image.filename}')
-        return render_template('home.html',result=True,imagepath = f'/{temp_name}_{image.filename}', prediction = prediction )
-    
-    else:
-        return redirect('/')
-        
-    
-if __name__ == "__main__":
-    app.run(debug=True)
+if uploaded_file is not None:
+    # Display uploaded image
+    st.image(uploaded_file, caption="Uploaded Image", use_container_width=True)
+
+    # Convert to PIL for preprocessing
+    image = Image.open(uploaded_file)
+
+    # Prediction
+    prediction = model_predict(image)
+
+    st.success("Prediction Complete")
+    st.subheader("Detected Disease:")
+    st.write(prediction)
+
+   
